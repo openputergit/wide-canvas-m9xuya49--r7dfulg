@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Face Recognition Lock</title>
+    <script src="https://unpkg.com/face-api.js@0.22.2/dist/face-api.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        .locked {
+            filter: blur(10px);
+        }
+        #overlay {
+            background: rgba(0, 0, 0, 0.9);
+        }
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div id="overlay" class="fixed inset-0 z-50 flex items-center justify-center">
+        <div class="text-center">
+            <div class="mb-8 relative">
+                <video id="video" width="640" height="480" autoplay muted class="rounded-lg shadow-xl"></video>
+                <div id="loading" class="absolute inset-0 flex items-center justify-center">
+                    <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-blue-500"></div>
+                </div>
+            </div>
+            <p id="status" class="text-white text-xl font-semibold mb-4">Initializing face detection...</p>
+        </div>
+    </div>
+
+    <div id="content" class="container mx-auto p-8 locked">
+        <!-- Protected content goes here -->
+        <h1 class="text-4xl font-bold text-center mb-8">Protected Content</h1>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <h2 class="text-xl font-semibold mb-4">Secure Section 1</h2>
+                <p>This content is protected by face recognition.</p>
+            </div>
+            <!-- Add more content sections as needed -->
+        </div>
+    </div>
+
+    <script>
+        const video = document.getElementById('video');
+        const overlay = document.getElementById('overlay');
+        const content = document.getElementById('content');
+        const status = document.getElementById('status');
+        const loading = document.getElementById('loading');
+        let isModelLoaded = false;
+        let detectionInterval;
+
+        // Load face-api models
+        Promise.all([
+            faceapi.nets.tinyFaceDetector.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models'),
+            faceapi.nets.faceLandmark68Net.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models'),
+            faceapi.nets.faceRecognitionNet.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models')
+        ]).then(startVideo);
+
+        function startVideo() {
+            navigator.mediaDevices.getUserMedia({ video: true })
+                .then(stream => {
+                    video.srcObject = stream;
+                    isModelLoaded = true;
+                    status.textContent = "Looking for face...";
+                    loading.style.display = 'none';
+                    startDetection();
+                })
+                .catch(err => {
+                    status.textContent = "Error accessing camera: " + err.message;
+                    loading.style.display = 'none';
+                });
+        }
+
+        function startDetection() {
+            detectionInterval = setInterval(async () => {
+                if (!isModelLoaded) return;
+
+                const detections = await faceapi.detectAllFaces(video, 
+                    new faceapi.TinyFaceDetectorOptions()
+                ).withFaceLandmarks();
+
+                if (detections.length > 0) {
+                    // Face detected
+                    clearInterval(detectionInterval);
+                    unlockContent();
+                }
+            }, 100);
+        }
+
+        function unlockContent() {
+            status.textContent = "Face verified! Unlocking...";
+            setTimeout(() => {
+                overlay.style.display = 'none';
+                content.classList.remove('locked');
+                // Stop the video stream
+                const stream = video.srcObject;
+                const tracks = stream.getTracks();
+                tracks.forEach(track => track.stop());
+            }, 1000);
+        }
+    </script>
+<script>document.body.addEventListener('wheel', e => { if (!e.ctrlKey) return; e.preventDefault(); return }, { passive: false })</script>
+	</body>
+</html>
